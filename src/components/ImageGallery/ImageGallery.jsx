@@ -1,58 +1,41 @@
-import React, { Component } from 'react';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import React, { useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
+
 import PropTypes from 'prop-types';
+
 import styles from './ImageGallery.module.css';
+
 import Loader from 'components/Loader';
 import Button from 'components/Button';
 import ImageGalleryItem from 'components/ImageGalleryItem';
-import Modal from 'components/Modal';
+
 import { fetchImages } from 'services/images-api.service.js';
 
-class ImageGallery extends Component {
-  static propTypes = {
-    searchQuery: PropTypes.string.isRequired,
-  };
+const ImageGallery = ({ searchQuery }) => {
+  const [images, setImages] = useState([]);
+  const [totalHits, setTotalHits] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const { ImageGallery } = styles;
+  
+  useEffect(() => {
+    commonResetStates();
+    setSearch(searchQuery);
+  }, [searchQuery]);
 
-  state = {
-    images: [],
-    totalHits: 0,
-    loading: false,
-    openedModal: false,
-    page: 1,
-    error: false,
-    search: '',
-  };
+  useEffect(() => {
+    setLoading(true);
 
-  totalPages = 0;
-  currentLargeImg = '';
-  currentAlt = '';
+    if (!search) return;
 
-  componentDidMount() {
-    const { searchQuery } = this.props;
-    this.setState({ search: searchQuery });
-  }
-
-  componentDidUpdate(prevProps, prevState) {
-    const { searchQuery } = this.props;
-    const newSearch = prevProps.searchQuery !== searchQuery;
-
-    if (newSearch) {
-      this.setState({ images: [], search: searchQuery });
-    }
-
-    const { page, search } = this.state;
-    const changedPage = prevState.page !== page;
-    const changedSearch = prevState.search !== search;
-
-    if (changedSearch || changedPage) {
-      this.setState({ loading: true });
-      fetchImages(search, page)
+    fetchImages(search, page)
       .then(({ hits, totalHits }) => {
         if (!hits.length) {
-          throw new Error(`No photos for search query: ${search}`)
+          return Promise.reject(
+            new Error(`No photos for search query: ${search}`)
+          );
         }
-
         const newImages = hits.map(
           ({ id, tags, webformatURL, largeImageURL }) => ({
             id,
@@ -61,81 +44,51 @@ class ImageGallery extends Component {
             largeImageURL,
           })
         );
-        this.setState(prevState => ({
-          images: [...prevState.images, ...newImages],
-          totalHits,
-        }));
+
+        setImages(prevImages => [...prevImages, ...newImages]);
+        setTotalHits(totalHits);
       })
       .catch(error => {
         toast.error(error.message);
-
-        this.setState({ totalHits: 0, error: true });
+        commonResetStates();
       })
-      .finally(this.setState({ loading: false }));
-    }
+      .finally(() => setLoading(false));
+  }, [page, search]);
+
+  function commonResetStates() {
+    setImages([]);
+    setTotalHits(0);
+    setPage(1);
+    setLoading(false);
   }
 
-  nextPageHandler = () => {
-    this.setState(prevState => ({
-      page: prevState.page + 1,
-    }));
+  const nextPageHandler = () => {
+    setPage(page + 1);
   };
-
-  closeHandler = () => {
-    this.setState({ openedModal: false });
-  };
-
-  clickImgHandler = evt => {
-    const { target } = evt;
-
-    if (target.nodeName === 'IMG') {
-      this.currentLargeImg = target.getAttribute('large');
-      this.currentAlt = target.getAttribute('alt');
-      this.setState({ openedModal: true });
-    }
-  };
-
-  render() {
-    const { ImageGallery } = styles;
-    const { images, loading, error, openedModal, totalHits } = this.state;
-
-    return (
-      <>
-        {openedModal && (
-          <Modal onClose={this.closeHandler}>
-            <img
-              src={this.currentLargeImg}
-              alt={this.currentAlt}
-              width="800"
-              height="600"
+  
+  return (
+    <>
+      <ul className={ImageGallery}>
+        {images.map(({ id, tags, webformatURL, largeImageURL }) => (
+          <ImageGalleryItem
+            key={id}
+            id={id}
+            tags={tags}
+            webformatURL={webformatURL}
+            largeImageURL={largeImageURL}
             />
-          </Modal>
-        )}
-
-        {!error && (
-          <ul className={ImageGallery} onClick={this.clickImgHandler}>
-            {images.map(({ id, tags, webformatURL, largeImageURL }) => (
-              <ImageGalleryItem
-                key={id}
-                id={id}
-                tags={tags}
-                webformatURL={webformatURL}
-                largeImageURL={largeImageURL}
-              />
-            ))}
-          </ul>
-        )}
-
-        {loading && <Loader />}
-
-        {images.length < totalHits && (
-          <Button name="loadMore" onClick={this.nextPageHandler} />
-        )}
-
-        {error && <ToastContainer autoClose={3000} closeOnClick />}
-      </>
-    );
-  }
+        ))}
+      </ul>
+      {loading && <Loader />}
+      {images.length < totalHits && (
+        <Button name="loadMore" onClick={nextPageHandler} />
+      )}
+    </>
+  );
 }
+
+ImageGallery.propTypes = {
+  searchQuery: PropTypes.string.isRequired,
+};
 
 export default ImageGallery;

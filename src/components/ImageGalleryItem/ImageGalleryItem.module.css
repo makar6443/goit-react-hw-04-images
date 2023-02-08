@@ -15,3 +15,9 @@
     transform: scale(1.03);
     cursor: zoom-in;
 }
+
+.ImageGalleryItem__large {
+    width: 100%;
+    max-height: 80%;
+    object-fit: cover;
+}
